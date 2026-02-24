@@ -1,0 +1,20 @@
+data/raw/*.csv
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# virtual environment
+venv/
+env/
+
+.vscode/
+
+# Files price integration : 
+notebooks/price_integration/*.csv
+notebooks/price_integration/*.xlsx
+notebooks/price_integration/final/*.csv
+notebooks/price_integration/final/*.xlsx
+
+notebooks/products_segmentation/csv/*.csv
+data/processed/basket_size.csv
