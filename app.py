@@ -21,7 +21,6 @@ def load_data():
         "aisle": "aisle_performance.csv",
         "dept": "department_performance.csv",
         "rfm": "rfm_customer_segments.csv",
-        "impulse": "impulse_products.csv",
         "enriched": "products_enriched.csv",
         "prod_segment": "products_per_segment.csv",
         "rfm_discounts": "rfm_with_discounts.csv",
@@ -31,17 +30,22 @@ def load_data():
         "rules_cross": "rules_cross_department.csv",
         "rules_cross_pairs": "rules_cross_department_pairs.csv",
         "rules_top": "rules_top_products.csv",
-        "prod_list": "products_in_rules.csv"
+        "prod_list": "products_in_rules.csv",
+        "first_pos": "first_position_products.csv",       # NOUVEAU
+        "last_pos": "last_position_products.csv",         # NOUVEAU
+        "top_1000": "top_1000_products.csv",              # NOUVEAU
+        "prices": "prices_final_imputed_translated.csv"   # NOUVEAU
     }
     
     data = {}
     for key, name in files.items():
-        if os.path.exists(name):
-            data[key] = pd.read_csv(name)
-        elif os.path.exists(os.path.join(base_path, name)):
-            data[key] = pd.read_csv(os.path.join(base_path, name))
+        path = name if os.path.exists(name) else os.path.join(base_path, name)
+        if os.path.exists(path):
+            # Le fichier prix utilise le point-virgule
+            sep = ";" if key == "prices" else ","
+            data[key] = pd.read_csv(path, sep=sep)
         else:
-            st.error(f"Missing file: {name}")
+            st.warning(f"File missing: {name}")
     return data
 
 data = load_data()
@@ -292,12 +296,69 @@ if data and 'rfm' in data:
         Target window: **Day {int(p80_val-2)}** (Source: Gupta & Zeithaml, 2006).
         """)
 
-    # Page 4
+# --- PAGE 4: CATEGORY & SHOPPING JOURNEY ANALYSIS ---
     elif menu == "📦 Category Performance":
-        st.title("📦 Category & Aisle Analysis")
+        st.title("📦 Category & Shopping Journey Analysis")
+        st.markdown("Global view of aisle performance and customer journey roles.")
+
+        # 1. TOP 20 AISLES (Graphique Treemap Seul)
+        st.subheader("📊 Top 20 Aisles by Sales Volume")
+        
         if 'aisle' in data:
-            st.plotly_chart(px.treemap(data['aisle'].nlargest(20, 'items_sold'), path=['aisle'], values='items_sold',
-                                       title="Top 10 SAisles by Volume"), use_container_width=True)
+            top_20_df = data['aisle'].nlargest(20, 'items_sold').copy()
+            
+            fig_aisle = px.treemap(
+                top_20_df, 
+                path=['aisle'], 
+                values='items_sold',
+                color='items_sold',
+                color_continuous_scale='Blues',
+                title="Aisle Distribution (Size = Units Sold)"
+            )
+            fig_aisle.update_layout(margin=dict(t=30, b=0, l=0, r=0), height=500)
+            st.plotly_chart(fig_aisle, use_container_width=True)
+
+        st.markdown("---")
+
+        # 2. SHOPPING JOURNEY ANALYSIS (ANCHORS VS IMPULSE)
+        st.subheader("🛒 Shopping Journey Analysis")
+        col_anc, col_imp = st.columns(2)
+
+        with col_anc:
+            st.info("### ⚓ Anchor Products (First in Cart)")
+            if 'first_pos' in data:
+                top_a = data['first_pos'].nlargest(10, 'first3_ratio')
+                fig_anc = px.bar(
+                    top_a, x='first3_ratio', y='product_name', orientation='h', 
+                    color='first3_ratio', color_continuous_scale='Blues',
+                    title="Top 10 Destination Products",
+                    labels={'first3_ratio': 'Start-of-Cart Probability', 'product_name': ''}
+                )
+                fig_anc.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_anc, use_container_width=True)
+
+        with col_imp:
+            st.warning("### ⚡ Impulse Products (Last in Cart)")
+            if 'last_pos' in data:
+                top_i = data['last_pos'].nlargest(10, 'last_position_ratio')
+                fig_imp = px.bar(
+                    top_i, x='last_position_ratio', y='product_name', orientation='h',
+                    color='last_position_ratio', color_continuous_scale='Oranges',
+                    title="Top 10 Impulse Products",
+                    labels={'last_position_ratio': 'End-of-Cart Probability', 'product_name': ''}
+                )
+                fig_imp.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_imp, use_container_width=True)
+
+        # 3. STRATEGIC RECOMMENDATIONS
+        st.markdown("---")
+        st.subheader("💡 Retail Strategy Recommendation")
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.success("**Store Layout:** Place your top 'Anchor' products at the back of the store to maximize exposure to other aisles.")
+        with c2:
+            st.error("**Checkout Optimization:** Feature 'Impulse' products near the checkout area or as final app notifications.")
 
     # Page 5
     elif menu == "🍱 Smart Bundles":
