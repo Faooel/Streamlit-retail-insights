@@ -4,17 +4,13 @@ import plotly.express as px
 import os
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
+import json
 
 # Config
-st.set_page_config(page_title="Retail Insights Dashboard", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="Retail insights dashboard", layout="wide", initial_sidebar_state="expanded")
 
+# Cached data loading
 @st.cache_data
-def get_segment_stats(df):
-        # Opti pour page 3
-        stats = df.groupby('segment')['avg_days_between_orders'].agg(['median', lambda x: x.quantile(0.8)]).reset_index()
-        stats.columns = ['Segment', 'Median Days', '80% Return By']
-        return stats
-
 def load_data():
     base_path = "data/processed/"
     files = {
@@ -30,405 +26,538 @@ def load_data():
         "rules_cross": "rules_cross_department.csv",
         "rules_cross_pairs": "rules_cross_department_pairs.csv",
         "rules_top": "rules_top_products.csv",
-        "prod_list": "products_in_rules.csv",
-        "first_pos": "first_position_products.csv",
-        "last_pos": "last_position_products.csv",
-        "top_1000": "top_1000_products.csv",
-        "prices": "prices_final_imputed_translated.csv"
+        "financial": "financial_impact_summary.csv",
+        "segment_metrics": "segment_metrics.csv",
+        "bundle_rec": "bundle_recommendations.csv",
+        "promo_efficiency": "promotion_efficiency.csv",
+        "sensitivity": "sensitivity_analysis.csv",
+        "metadata": "metadata_06.json",
+        "departments": "departments_optimized.csv",
+        "aisles": "aisles_optimized.csv"
     }
     
     data = {}
     for key, name in files.items():
-        path = name if os.path.exists(name) else os.path.join(base_path, name)
+        path = os.path.join(base_path, name)
         if os.path.exists(path):
-            # Le fichier prix utilise le point-virgule
-            sep = ";" if key == "prices" else ","
-            data[key] = pd.read_csv(path, sep=sep)
+            if key == "metadata":
+                with open(path, 'r') as f:
+                    data[key] = json.load(f)
+            else:
+                data[key] = pd.read_csv(path)
         else:
             st.warning(f"File missing: {name}")
+    
     return data
 
-data = load_data()
+# Helper functions
+@st.cache_data
+def get_segment_stats(df):
+    stats = df.groupby('segment')['avg_days_between_orders'].agg(['median', lambda x: x.quantile(0.8)]).reset_index()
+    stats.columns = ['Segment', 'Median days', '80% return by']
+    return stats
 
-if data and 'rfm' in data:
-    df_rfm = data['rfm']
-    if 'RFM_score' not in df_rfm.columns:
-        df_rfm['RFM_score'] = df_rfm['R_score'] + df_rfm['F_score'] + df_rfm['M_score']
+# Main app
+def main():
+    data = load_data()
     
-    # Nav
-    st.sidebar.title("📊 Retail Insights")
-    menu = st.sidebar.radio("Navigation", [
-        "🏠 Overview", 
-        "👥 Customer Segments", 
-        "⏰ Purchase Timing", 
-        "📦 Category Performance",
-        "🍱 Smart Bundles"
-    ])
-
-# Page 1
-    if menu == "🏠 Overview":
-        st.title("📊 Executive Performance Overview")
-        st.markdown("Global sales analysis, category performance, and revenue concentration.")
-
-        # Segmentation filtre
-        segments_list = ["All Segments"] + sorted(list(df_rfm['segment'].unique()))
-        segment_selected = st.selectbox("Select a segment to filter indicators:", segments_list)
-
-        df_filtered = df_rfm if segment_selected == "All Segments" else df_rfm[df_rfm['segment'] == segment_selected]
+    st.sidebar.title("🛒 Retail insights")
+    menu = st.sidebar.radio(
+        "Navigation",
+        [
+            "🏠 Home",
+            "💰 Financial impact",
+            "👥 Customer segments",
+            "⏰ Purchase timing",
+            "📦 Category performance",
+            "🍱 Smart bundles",
+            "📈 Scenario planner",
+            "ℹ️ Sources"
+        ]
+    )
+    
+   
+    # Homepage
+   
+    if menu == "🏠 Home":
+        st.title("🏠 Retail insights dashboard")
+        st.markdown("**Data-driven retail insights for cost savings & revenue growth**")
+        st.markdown("*DSTI Project 2 - Applied MSc in Data Analytics/Science/Engineering*")
         
-        # KPI
-        total_rev = df_filtered['total_spent_eur'].sum()
-        total_ord = df_filtered['num_orders'].sum()
-        total_cust = len(df_filtered)
-        
-        aov = total_rev / total_ord if total_ord > 0 else 0
-        rev_per_cust = total_rev / total_cust if total_cust > 0 else 0
-        avg_days = df_filtered['avg_days_between_orders'].mean()
-        avg_rfm = df_filtered['RFM_score'].mean()
-        active_segments_count = len(df_filtered['segment'].unique())
-
-        st.subheader(f"Statistics: {segment_selected}")
-        
-        m1, m2, m3, m4 = st.columns(4)
-        m1.metric("Global Revenue", f"{total_rev:,.2f} €")
-        m2.metric("Total Orders", f"{total_ord:,}")
-        m3.metric("Unique Customers", f"{total_cust:,}")
-        m4.metric("Revenue / Customer", f"{rev_per_cust:,.2f} €")
-
-        m5, m6, m7, m8 = st.columns(4)
-        m5.metric("Avg Basket", f"{aov:.2f} €")
-        m6.metric("Return Cycle", f"{avg_days:.1f} days")
-        m7.metric("Avg RFM Score", f"{avg_rfm:.1f} / 15")
-        m8.metric("Active Segments", active_segments_count)
-
-        st.markdown("---")
-
-        # Pareto graph
-        if 'dept' in data:
-            st.subheader("Pareto Analysis: Department Focus")
-            df_pareto = data['dept'].sort_values(by='items_sold', ascending=False)
-            df_pareto['cum_perc'] = 100 * (df_pareto['items_sold'].cumsum() / df_pareto['items_sold'].sum())
+        if "metadata" in data:
+            meta = data["metadata"]
+            stats = meta.get("summary_statistics", {})
             
-            fig_pareto = go.Figure()
-            fig_pareto.add_trace(go.Bar(x=df_pareto['department'], y=df_pareto['items_sold'], name="Sales Volume", marker_color='#3b82f6'))
-            fig_pareto.add_trace(go.Scatter(x=df_pareto['department'], y=df_pareto['cum_perc'], name="Cumulative %", yaxis="y2", line=dict(color="#ef4444", width=3)))
-            fig_pareto.update_layout(
-                yaxis2=dict(overlaying="y", side="right", range=[0, 105]), 
-                height=450,
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            fig_pareto.add_hline(y=80, line_dash="dash", line_color="green", annotation_text="80% Threshold", yref="y2")
-            st.plotly_chart(fig_pareto, use_container_width=True)
-
-        st.markdown("---")
-
-        # Treemaps
-        col_left, col_right = st.columns(2)
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Total customers", f"{stats.get('total_customers', 0):,}")
+            with col2:
+                st.metric("Annual net impact", f"EUR {stats.get('total_net_impact_eur', 0):,.0f}", 
+                         delta=f"+{stats.get('average_roi', 0)}x ROI")
+            with col3:
+                st.metric("Targeting efficiency", f"{stats.get('roi_improvement', 0)}x", 
+                         delta="vs. untargeted")
+            with col4:
+                st.metric("Customer coverage", f"{stats.get('customer_coverage_pct', 0):.1f}%", 
+                         delta="30-60% target")
+            
+            st.info("""
+            💡 **What is net impact?**
+            Estimated additional annual profit from targeted promotions:
+            - Revenue lift from increased purchases
+            - Plus bundle upsell revenue
+            - Minus discount costs
+            
+            *Based on research-backed lift rates (Wamsler et al., 2024)*
+            """)
         
-        with col_left:
-                # Aisle performance chart
-                top_20_aisles = data['aisle'].nlargest(20, 'items_sold')
-                total_aisle_items = data['aisle']['items_sold'].sum()
+        if "segment_metrics" in data:
+            st.subheader("Annual net impact by customer segment")
+            df_seg = data["segment_metrics"].sort_values("net_impact_eur", ascending=False)
+            
+            fig = px.bar(
+                df_seg,
+                x="net_impact_eur",
+                y="segment",
+                orientation="h",
+                color="net_impact_eur",
+                color_continuous_scale="Blues",
+                labels={"net_impact_eur": "Net impact (EUR)", "segment": "Customer segment"}
+            )
+            fig.update_layout(xaxis_title="Net impact (EUR)", yaxis_title="", showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.caption("""
+            🔍 **Key insight**: Premium and loyal customers drive the highest net impact. 
+            Focus promotions on these segments first for maximum return.
+            """)
+        
+        if "rfm" in data:
+            df_rfm = data["rfm"]
+            st.subheader("Quick stats")
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.metric("Avg revenue / customer", f"{df_rfm['total_spent_eur'].mean():.2f} €")
+            with c2:
+                st.metric("Avg orders / customer", f"{df_rfm['num_orders'].mean():.1f}")
+            with c3:
+                st.metric("Avg days between orders", f"{df_rfm['avg_days_between_orders'].median():.1f} days")
+    
+   
+    # Financial impact
+   
+    elif menu == "💰 Financial impact":
+        st.title("💰 Financial impact analysis")
+        
+        if "financial" in data:
+            df_fin = data["financial"]
+            
+            selected_seg = st.selectbox("Select segment", sorted(df_fin["segment"].unique()))
+            seg_fin = df_fin[df_fin["segment"] == selected_seg].iloc[0] if len(df_fin[df_fin["segment"] == selected_seg]) > 0 else None
+            
+            if seg_fin is not None:
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Net impact", f"€{seg_fin.get('net_impact_eur', 0):,.0f}")
+                with col2:
+                    roi_val = seg_fin.get("roi", "N/A")
+                    st.metric("ROI", f"{roi_val}x" if roi_val != "N/A" else "N/A")
+                with col3:
+                    roi_imp = seg_fin.get("roi_improvement_factor", "N/A")
+                    st.metric("ROI improvement", f"{roi_imp}x" if roi_imp != "N/A" else "N/A")
                 
-                fig_aisle = px.treemap(
-                    top_20_aisles, 
-                    path=['aisle'], 
-                    values='items_sold', 
-                    color='items_sold',
-                    color_continuous_scale='Greys',
-                    title=f"Top 20 Aisles"
+                st.subheader("Financial impact breakdown")
+                waterfall_data = pd.DataFrame({
+                    "Component": ["Baseline revenue", "Revenue lift (+42.3%)", "Bundle upsell", "Discount cost", "Net impact"],
+                    "Value": [
+                        seg_fin.get("baseline_revenue_eur", 0),
+                        seg_fin.get("revenue_lift_eur", 0),
+                        seg_fin.get("bundle_uplift_eur", 0),
+                        -seg_fin.get("discount_cost_eur", 0),
+                        seg_fin.get("net_impact_eur", 0)
+                    ]
+                })
+                
+                fig = go.Figure(go.Waterfall(   
+                x=waterfall_data["Component"],
+                y=waterfall_data["Value"],
+                connector_mode="spanning"  # <--- Correction effectuée
+                ))
+                fig.update_layout(title=f"Financial impact breakdown: {selected_seg}", yaxis_title="EUR")
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.info("""
+                📊 **How to read this chart**:
+                1. **Baseline revenue**: What this segment spends today
+                2. **Revenue lift (+42.3%)**: Extra revenue from increased purchase frequency
+                3. **Bundle upsell**: Extra revenue from cross-sell recommendations
+                4. **Discount cost**: Money spent on discounts (only paid when redeemed)
+                5. **Net impact**: Final profit impact (Lift + Upsell − Cost)
+                """)
+            
+            if "promo_efficiency" in data:
+                st.subheader("Targeted vs. untargeted promotion ROI")
+                df_eff = data["promo_efficiency"]
+                
+                df_melt = df_eff.melt(
+                    id_vars="segment",
+                    value_vars=["roi", "untargeted_roi"],
+                    var_name="Approach",
+                    value_name="ROI"
                 )
-                fig_aisle.update_layout(margin=dict(t=50, b=0, l=0, r=0), height=500)
-                st.plotly_chart(fig_aisle, use_container_width=True)
-
-        with col_right:
-            st.subheader("Revenue Concentration")
-            conc = df_rfm.groupby('segment').agg(u=('user_id', 'count'), r=('total_spent_eur', 'sum')).reset_index()
-            conc['% Customers'] = (conc['u'] / conc['u'].sum()) * 100
-            conc['% Revenue'] = (conc['r'] / conc['r'].sum()) * 100
-            
-            fig_money = px.bar(
-                conc, x='segment', y=['% Customers', '% Revenue'], barmode='group',
-                labels={'value': 'Percentage (%)', 'variable': 'Metric'},
-                color_discrete_map={'% Customers': '#94a3b8', '% Revenue': '#3b82f6'},
-                title="Customer vs Revenue Concentration by Segment"
-            )
-            fig_money.update_layout(height=650)
-            st.plotly_chart(fig_money, use_container_width=True)
-
-# Page 2
-    elif menu == "👥 Customer Segments":
-        st.title("👥 Customer Segmentation & Profiling")
-        st.markdown(f"**Methodology:** 8-Segment RFM Framework (Kobets & Yashyna, 2025). Total: **{len(df_rfm):,} customers**.")
-
-        # Global segment
-        col_mix1, col_mix2 = st.columns([1, 1])
-        with col_mix1:
-            st.subheader("Customer Base Share (%)")
-            fig_pie = px.pie(df_rfm, names='segment', hole=0.4, 
-                             color_discrete_sequence=px.colors.qualitative.Pastel)
-            fig_pie.update_layout(margin=dict(t=30, b=0, l=0, r=0))
-            st.plotly_chart(fig_pie, use_container_width=True)
-            
-        with col_mix2:
-            st.subheader("Average RFM Profile (Scores 1-5)")
-            avg_rfm = df_rfm.groupby('segment')[['R_score', 'F_score', 'M_score']].mean().reset_index()
-            fig_rfm = px.bar(avg_rfm, x='segment', y=['R_score', 'F_score', 'M_score'], 
-                             barmode='group', labels={'value': 'Avg Score'})
-            st.plotly_chart(fig_rfm, use_container_width=True)
-
-        st.markdown("---")
-
-        # Srategi et top 10 produits
-        st.subheader("Detailed Segment Explorer")
-        selected_seg = st.selectbox("Select a segment to explore details:", sorted(df_rfm['segment'].unique()))
-        
-        col_info, col_prod = st.columns([1, 2])
-        
-        with col_info:
-            st.markdown(f"#### Strategic Profile: {selected_seg}")
-            df_seg = df_rfm[df_rfm['segment'] == selected_seg]
+                df_melt = df_melt[df_melt["ROI"] != "N/A"]
+                df_melt["ROI"] = pd.to_numeric(df_melt["ROI"], errors="coerce")
+                df_melt["Approach"] = df_melt["Approach"].map({"roi": "Targeted", "untargeted_roi": "Untargeted"})
+                
+                fig = px.bar(
+                    df_melt,
+                    x="segment",
+                    y="ROI",
+                    color="Approach",
+                    barmode="group",
+                    title="Targeted vs. untargeted promotion ROI by segment",
+                    labels={"ROI": "ROI (EUR returned per EUR spent)", "segment": "Segment"}
+                )
+                st.plotly_chart(fig, use_container_width=True)
+                
+                st.success("""
+                ✅ **Why targeting works better**:
+                - **Higher redemption**: 42.4% vs. 27.7% (customers redeem when timing matches their needs)
+                - **Higher revenue lift**: Targeted promotions trigger +42.3% purchase frequency
+                - **Better bundle adoption**: Relevant recommendations convert better
+                
+                *Result: Every €1 spent on targeted discounts generates more net impact than untargeted promotions.*
+                """)
     
-            st.metric("Segment Population", f"{len(df_seg):,}")
-            st.metric("Avg Revenue / Customer", f"{df_seg['total_spent_eur'].mean():.2f} €")
-            st.metric("Avg Orders / Customer", f"{df_seg['num_orders'].mean():.1f}")
+   
+    # Customer segments
+   
+    elif menu == "👥 Customer segments":
+        st.title("👥 Customer segmentation")
+        st.write(f"Based on RFM analysis. Total customers: **{len(data.get('rfm', [])):,}**")
+        
+        if "rfm" in data:
+            df_rfm = data["rfm"]
             
-            # Action Recommendation
-            strategies = {
-                "Premium": "VIP treatment. Focus on retention and exclusive early access.",
-                "Loyal": "Reward consistency. Use cross-selling to increase basket value.",
-                "Promising": "Incentivize frequency. Targeted 'next-purchase' coupons.",
-                "High_Check": "Highlight high-value items and bulk-buy opportunities.",
-                "New": "Onboarding journey. Introduce them to loyalty program benefits.",
-                "Sleeping": "Re-activation offers with high urgency. Send 'We miss you' deals.",
-                "Frugal": "Promote discounts and budget-friendly bundles.",
-                "Lost": "Deep discount win-back campaigns or exit surveys."
-            }
-            st.warning(f"**Recommended Strategy:** \n\n {strategies.get(selected_seg, 'Standard nurturing.')}")
-
-        with col_prod:
-            st.subheader(f"Top 10 Favorite Products: {selected_seg}")
-            if 'prod_segment' in data:
-                prods_str = data['prod_segment'][data['prod_segment']['segment'] == selected_seg]['products'].values[0]
-                prods_list = [p.strip() for p in prods_str.split(',')]
-
-                p_col1, p_col2 = st.columns(2)
-                for i, p in enumerate(prods_list[:20]):
-                    if i < 10:
-                        p_col1.write(f"**{i+1}.** {p}")
-                    else:
-                        p_col2.write(f"**{i+1}.** {p}")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Customer share (%)")
+                fig_pie = px.pie(df_rfm, names='segment', hole=0.4, color_discrete_sequence=px.colors.qualitative.Pastel)
+                st.plotly_chart(fig_pie, use_container_width=True)
+            with col2:
+                st.subheader("Average RFM scores")
+                avg_rfm = df_rfm.groupby('segment')[['R_score', 'F_score', 'M_score']].mean().reset_index()
+                fig_rfm = px.bar(avg_rfm, x='segment', y=['R_score', 'F_score', 'M_score'], barmode='group', labels={'value': 'Score (1-5)'})
+                st.plotly_chart(fig_rfm, use_container_width=True)
+            
+            st.markdown("-")
+            st.subheader("Segment explorer")
+            selected_seg = st.selectbox("Select a group to analyze:", sorted(df_rfm['segment'].unique()))
+            
+            col_left, col_right = st.columns([1, 2])
+            with col_left:
+                st.markdown(f"### Profile: {selected_seg}")
+                df_seg = df_rfm[df_rfm['segment'] == selected_seg]
+                st.metric("Total customers", f"{len(df_seg):,}")
+                st.metric("Avg revenue", f"{df_seg['total_spent_eur'].mean():.2f} €")
+                st.metric("Avg orders", f"{df_seg['num_orders'].mean():.1f}")
+                
+                actions = {
+                    "Premium": "VIP loyalty rewards and exclusive early access.",
+                    "Loyal": "Retention focus. Use cross-selling to increase basket size.",
+                    "Promising": "Incentivize frequency with 'next-purchase' coupons.",
+                    "High_Check": "Highlight premium items and bulk deals.",
+                    "New": "Onboarding journey. Introduce them to loyalty benefits.",
+                    "Sleeping": "Re-activation offers. Send urgent 'We miss you' deals.",
+                    "Frugal": "Target with discounts and budget bundles.",
+                    "Lost": "Aggressive win-back campaigns or exit surveys."
+                }
+                st.info(f"**Action:** {actions.get(selected_seg, 'Standard marketing.')}")
+            
+            with col_right:
+                st.subheader(f"Top favorite products")
+                if 'prod_segment' in data:
+                    prods_str = data['prod_segment'][data['prod_segment']['segment'] == selected_seg]['products'].values[0]
+                    prods_list = [p.strip() for p in prods_str.split(',')]
+                    p_col1, p_col2 = st.columns(2)
+                    for i, p in enumerate(prods_list[:20]):
+                        if i < 10:
+                            p_col1.write(f"**{i+1}.** {p}")
+                        else:
+                            p_col2.write(f"**{i+1}.** {p}")
+                else:
+                    st.info("Product list not available.")
+            
+            st.markdown("-")
+            st.write("**Insight:** RFM segments (Kobets & Yashyna 2025) help target customers with the right message at the right time.")
+    
+   
+    # Purchase timing
+   
+    elif menu == "⏰ Purchase timing":
+        st.title("⏰ Purchase frequency analysis")
+        st.write("Analysis of customer return cycles and churn risk thresholds.")
+        
+        if "rfm" in data:
+            df_rfm = data["rfm"]
+            
+            col_f1, col_f2 = st.columns(2)
+            with col_f1:
+                segments = ["All segments"] + sorted(list(df_rfm['segment'].unique()))
+                selected_seg = st.selectbox("Filter by segment:", segments)
+            with col_f2:
+                categories = ["All categories", "Produce", "Dairy", "Beverages"]
+                selected_cat = st.selectbox("Filter by category:", categories)
+            
+            if selected_seg == "All segments":
+                df_plot = df_rfm
             else:
-                st.info("Product data for segments is not available.")
-
-        st.markdown("---")
-        st.info("**Scientific Insight:** RFM analysis transforms raw transaction data into strategic customer groups, allowing for high-precision targeting.")
-
-# Page 3
-    elif menu == "⏰ Purchase Timing":
-        st.title("⏰ PURCHASE TIMING ANALYSIS")
+                df_plot = df_rfm[df_rfm['segment'] == selected_seg]
+            
+            median_days = df_plot['avg_days_between_orders'].median()
+            p80_days = df_plot['avg_days_between_orders'].quantile(0.8)
+            k1, k2 = st.columns(2)
+            k1.metric("Median return time", f"{median_days:.1f} days")
+            k2.metric("80% return threshold", f"{p80_days:.1f} days")
+            st.markdown("-")
+            
+            df_sample = df_plot.sample(min(len(df_plot), 25000))
+            fig = px.histogram(
+                df_sample,
+                x="avg_days_between_orders",
+                nbins=50,
+                title=f"Return cycle: {selected_seg} | {selected_cat}",
+                color_discrete_sequence=['#3b82f6'],
+                labels={'avg_days_between_orders': 'Days'}
+            )
+            fig.add_vline(x=p80_days, line_dash="dot", line_color="red", annotation_text="80% limit")
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.subheader("Segment benchmarks & recommended actions")
+            timing_table = get_segment_stats(df_rfm)
+            
+            actions = {
+                "Premium": "VIP reward program",
+                "Loyal": "Cross-sell promotion",
+                "Promising": "Next-purchase discount",
+                "High_Check": "Bulk buy incentives",
+                "New": "Welcome coupon",
+                "Sleeping": "Re-activation email",
+                "Frugal": "Value pack deals",
+                "Lost": "Win-back campaign"
+            }
+            timing_table['Recommended action'] = timing_table['Segment'].map(actions)
+            timing_table['Median days'] = timing_table['Median days'].map('{:.1f}'.format)
+            timing_table['80% return by'] = timing_table['80% return by'].map('{:.1f} days'.format)
+            st.table(timing_table)
+            
+            st.warning(f"**Retention strategy:** For {selected_seg}, customers are likely to churn after **{int(p80_days)} days**. Target them at day **{int(p80_days - 2)}**.")
+    
+   
+    # Category performance
+   
+    elif menu == "📦 Category performance":
+        st.title("📦 Category & shopping journey analysis")
+        st.write("Analysis of product roles: Anchors (triggers) vs last-position (complements).")
         
-        # Filtre
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            seg_filter = st.selectbox("🔍 FILTER SEGMENT:", ["All Segments"] + sorted(list(df_rfm['segment'].unique())))
-        with col_f2:
-            st.selectbox("🔍 FILTER CATEGORY:", ["All Categories", "Produce", "Dairy", "Beverages", "Snacks"])
-
-        df_timing = df_rfm if seg_filter == "All Segments" else df_rfm[df_rfm['segment'] == seg_filter]
-
-        st.markdown("---")
-
-        st.subheader("INTER-PURCHASE TIME DISTRIBUTION")
-        
-        median_val = df_timing['avg_days_between_orders'].median()
-        p80_val = df_timing['avg_days_between_orders'].quantile(0.8)
-
-        plot_data = df_timing if len(df_timing) < 50000 else df_timing.sample(50000)
-
-        fig_dist = px.histogram(
-            plot_data, 
-            x="avg_days_between_orders", 
-            nbins=40,
-            title=f"Purchase Frequency Curve - {seg_filter} (Sampled for speed)",
-            labels={'avg_days_between_orders': 'Days between purchases'},
-            color_discrete_sequence=['#3b82f6'],
-            histnorm='probability density' 
-        )
-        
-        fig_dist.add_vline(x=median_val, line_dash="dash", line_color="green", annotation_text=f"Med: {median_val:.1f}d")
-        fig_dist.add_vline(x=p80_val, line_dash="dot", line_color="red", annotation_text=f"80%: {p80_val:.1f}d")
-
-        fig_dist.update_layout(height=400, showlegend=False)
-        st.plotly_chart(fig_dist, use_container_width=True)
-
-        # key timing metrics
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Median Return Time", f"{median_val:.1f} days")
-        with c2:
-            st.metric("80% Threshold", f"{p80_val:.1f} days")
-        st.markdown("---")
-
-        # segment-specific timing stats
-        st.subheader("SEGMENT-SPECIFIC TIMING")
-        
-        df_stats = get_segment_stats(df_rfm)
-        
-        actions_map = {
-            "Premium": "Weekly Reward", "Loyal": "Bi-weekly Promo", 
-            "Promising": "Monthly Discount", "Lost": "Win-back Campaign",
-            "Sleeping": "Re-activation", "New": "Onboarding", "Frugal": "Value Packs", "High_Check": "VIP Upsell"
-        }
-        df_stats['Action'] = df_stats['Segment'].map(actions_map).fillna("Standard")
-        
-        df_stats['Median Days'] = df_stats['Median Days'].map('{:,.1f}'.format)
-        df_stats['80% Return By'] = df_stats['80% Return By'].map('{:,.1f} days'.format)
-        
-        st.table(df_stats)
-
-        # At-risk alert
-        st.subheader("AT-RISK CUSTOMER ALERTS")
-        st.error(f"""
-        **Strategic Advisory:** For the **{seg_filter}** group, the engagement drop-off starts after **{p80_val:.1f} days**. 
-        
-        **Recommendation:** To prevent churn, trigger automated triggers 2 days **before** the 80% threshold. 
-        Target window: **Day {int(p80_val-2)}** (Source: Gupta & Zeithaml, 2006).
-        """)
-
-# --- PAGE 4: CATEGORY & SHOPPING JOURNEY ANALYSIS ---
-    elif menu == "📦 Category Performance":
-        st.title("📦 Category & Shopping Journey Analysis")
-        st.markdown("Product role analysis in the customer journey: **Anchors** (Triggers) vs **Last-Position** (Complements).")
-
-        # 1. TOP 20 AISLES (Clean View)
-        st.subheader("📊 Top 20 Aisles by Sales Volume")
         if 'aisle' in data:
-            top_20_df = data['aisle'].nlargest(20, 'items_sold').copy()
+            st.subheader("Top 20 aisles by volume")
+            top_aisles = data['aisle'].nlargest(20, 'items_sold')
             fig_aisle = px.treemap(
-                top_20_df, 
-                path=['aisle'], 
+                top_aisles,
+                path=['aisle'],
                 values='items_sold',
                 color='items_sold',
                 color_continuous_scale='Blues'
             )
             fig_aisle.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=450)
             st.plotly_chart(fig_aisle, use_container_width=True)
-
-        st.markdown("---")
-
-        # 2. JOURNEY ANALYSIS (ANCHORS VS LAST-POSITION)
-        st.subheader("🛒 Shopping Journey Analysis")
+            
+            st.markdown("-")
+            
+            st.subheader("Shopping journey analysis")
+            st.caption("Note: Ratio = sur-representation ratio in a specific position compared to the global average.")
+            
+            col_left, col_right = st.columns(2)
+            with col_left:
+                st.info("### ⚓ Anchor products (first in cart)")
+                if 'first_pos' in data:
+                    top_anchors = data['first_pos'].nlargest(10, 'first3_ratio')
+                    fig_anchors = px.bar(
+                        top_anchors,
+                        x='first3_ratio',
+                        y='product_name',
+                        orientation='h',
+                        color='first3_ratio',
+                        color_continuous_scale='Blues',
+                        title="Top 10: first_position_ratio",
+                        labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
+                    )
+                    fig_anchors.update_layout(yaxis={'categoryorder':'total ascending'})
+                    st.plotly_chart(fig_anchors, use_container_width=True)
+            
+            with col_right:
+                st.info("### 🛒 Complement products (last in cart)")
+                if 'last_pos' in data:
+                    top_lasts = data['last_pos'].nlargest(10, 'last_position_ratio')
+                    fig_lasts = px.bar(
+                        top_lasts,
+                        x='last_position_ratio',
+                        y='product_name',
+                        orientation='h',
+                        color='last_position_ratio',
+                        color_continuous_scale='Oranges',
+                        title="Top 10: last_position_ratio",
+                        labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
+                    )
+                    fig_lasts.update_layout(yaxis={'categoryorder':'total ascending'})
+                    st.plotly_chart(fig_lasts, use_container_width=True)
+            
+            st.markdown("-")
+            st.subheader("Retail strategy suggestions")
+            rec_col1, rec_col2 = st.columns(2)
+            with rec_col1:
+                st.success("**Navigation:** Place high *first_position_ratio* items (anchors) at the back of the store to increase travel distance.")
+            with rec_col2:
+                st.error("**Checkout:** Use high *last_position_ratio* items for checkout displays or final app notifications.")
+    
+   
+    # Smart bundles
+   
+    elif menu == "🍱 Smart bundles":
+        st.title("🍱 Product bundles & association rules")
+        st.write("Identify product pairings to increase average order value (AOV) based on transaction history.")
         
-        col_anc, col_last = st.columns(2)
-
-        with col_anc:
-            st.info("### ⚓ Anchor Products (First in Cart)")
-            if 'first_pos' in data:
-                # Identify products most likely to be at the start of the journey
-                top_a = data['first_pos'].nlargest(10, 'first3_ratio')
-                fig_anc = px.bar(
-                    top_a, 
-                    x='first3_ratio', 
-                    y='product_name', 
-                    orientation='h', 
-                    color='first3_ratio', 
-                    color_continuous_scale='Blues',
-                    title="Top 10: first_position_ratio",
-                    labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
-                )
-                fig_anc.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig_anc, use_container_width=True)
-
-        with col_last:
-            st.warning("### 🛒 Last-Position Products (Checkout)")
-            if 'last_pos' in data:
-                # Identify products most likely to be added at the very end
-                top_l = data['last_pos'].nlargest(10, 'last_position_ratio')
-                fig_last = px.bar(
-                    top_l, 
-                    x='last_position_ratio', 
-                    y='product_name', 
-                    orientation='h',
-                    color='last_position_ratio', 
-                    color_continuous_scale='Oranges',
-                    title="Top 10: last_position_ratio",
-                    labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
-                )
-                fig_last.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig_last, use_container_width=True)
-
-        # 3. STRATEGIC RECOMMENDATIONS
-        st.markdown("---")
-        st.subheader("💡 Retail Strategy Recommendation")
+        tab_seg, tab_dept, tab_cross = st.tabs(["By segment", "By department", "Cross-department"])
         
-        c1, c2 = st.columns(2)
-        with c1:
-            st.success("**Navigation Strategy:** Place products with a high *first_position_ratio* at the back of the store to maximize the customer's travel distance and exposure to other aisles.")
-        with c2:
-            st.error("**Checkout Strategy:** Use products with a high *last_position_ratio* for 'Frequently Forgotten' app notifications or for high-visibility checkout area displays.")
-
-# --- PAGE 5: SMART BUNDLES ---
-    elif menu == "🍱 Smart Bundles":
-        st.title("🍱 Smart Bundles")
-        st.markdown("""
-        **Objective:** Increase Average Order Value (AOV) by suggesting relevant product pairings 
-        based on frequent itemset mining.
-        """)
-
-        # Création de 3 onglets pour les différentes stratégies de recommandation
-        t1, t2, t3 = st.tabs(["🎯 By Segment", "🏢 By Department", "🔄 Cross-Department"])
-
-        # ONGLET 1 : BUNDLES PAR SEGMENT
-        with t1:
-            st.subheader("Segment-Specific Recommendations")
-            st.write("Targeted bundles based on the unique shopping habits of each group.")
-            if 'rules_seg' in data:
-                # Sélecteur de segment
-                seg_b = st.selectbox("Select Target Segment:", sorted(df_rfm['segment'].unique()), key="sb1")
-                
-                # Filtrage et tri par Lift (puissance de l'association)
-                rules_s = data['rules_seg'][data['rules_seg']['segment'] == seg_b].sort_values('lift', ascending=False).head(10)
+        with tab_seg:
+            st.subheader("Segment-specific rules")
+            if 'bundle_rec' in data:
+                target_seg = st.selectbox("Select target segment", sorted(data['bundle_rec']['segment'].unique()))
+                rules_s = data['bundle_rec'][data['bundle_rec']['segment'] == target_seg].sort_values("estimated_revenue_per_recommendation", ascending=False).head(10)
                 
                 if not rules_s.empty:
-                    st.dataframe(rules_s[['antecedent', 'consequent', 'confidence', 'lift']], use_container_width=True)
-                    st.success(f"**Top Insight:** Customers in the **{seg_b}** segment are very likely to buy **{rules_s.iloc[0]['consequent']}** when they have **{rules_s.iloc[0]['antecedent']}** in their cart.")
+                    for idx, row in rules_s.iterrows():
+                        with st.container(border=True):
+                            col1, col2, col3 = st.columns([2, 1, 1])
+                            with col1:
+                                st.subheader(f"{str(row['antecedent'])[:50]} → {str(row['consequent'])[:50]}")
+                                st.caption(f"{row['antecedent_dept']} → {row['consequent_dept']}")
+                            with col2:
+                                st.metric("Est. revenue", f"€{row['estimated_revenue_per_recommendation']:.2f}")
+                                st.caption(f"Lift: {row['lift']:.2f}x")
+                            with col3:
+                                st.metric("Margin", f"{row['gross_margin_used']*100:.0f}%")
+                                st.caption(f"Discount: {row['recommended_discount_percent']:.1f}%")
                 else:
-                    st.info("No specific rules found for this segment.")
-
-        # ONGLET 2 : BUNDLES PAR DÉPARTEMENT
-        with t2:
-            st.subheader("Departmental Product Pairings")
-            st.write("Internal associations to optimize shelf placement within a specific department.")
+                    st.info("No strong associations found for this segment.")
+        
+        with tab_dept:
+            st.subheader("Intra-department pairings")
             if 'rules_dept' in data:
-                # Liste des départements présents dans les règles
-                dept_list = sorted(data['rules_dept']['department'].unique())
-                selected_dept = st.selectbox("Select Department:", dept_list)
-                
-                rules_d = data['rules_dept'][data['rules_dept']['department'] == selected_dept].sort_values('lift', ascending=False).head(10)
-                st.dataframe(rules_d[['antecedent', 'consequent', 'support', 'confidence', 'lift']], use_container_width=True)
-
-        # ONGLET 3 : OPPORTUNITÉS CROSS-DEPARTMENT
-        with t3:
-            st.subheader("🔄 Strategic Cross-Selling Opportunities")
-            st.write("Associations between different departments (e.g., Snacks + Beverages).")
+                depts = sorted(data['rules_dept']['department'].unique())
+                target_dept = st.selectbox("Select department:", depts)
+                dept_rules = data['rules_dept'][data['rules_dept']['department'] == target_dept].sort_values('lift', ascending=False).head(10)
+                st.dataframe(dept_rules[['antecedent', 'consequent', 'confidence', 'lift']], use_container_width=True)
+        
+        with tab_cross:
+            st.subheader("Cross-department sales")
+            st.write("Pairings between different store areas.")
             if 'rules_cross_pairs' in data:
-                # On affiche les meilleures opportunités cross-départementales au global
-                rules_c = data['rules_cross_pairs'].sort_values('lift', ascending=False).head(15)
-                
-                # On rend le tableau plus lisible en montrant les départements concernés
-                st.dataframe(rules_c[['antecedent', 'consequent', 'antecedent_dept', 'consequent_dept', 'lift']], use_container_width=True)
-                
-                st.info("""
-                **Strategic Use:** Use these rules to create 'Meal Kits' or promotional displays that link 
-                two different areas of the store (e.g., placing specific crackers in the cheese aisle).
-                """)
-
-        # BAS DE PAGE : EXPLICATION DES MÉTRIQUES (Pour le Jury)
-        with st.expander("📚 Understanding metrics (Lift & Confidence)"):
+                cross_rules = data['rules_cross_pairs'].sort_values('lift', ascending=False).head(15)
+                st.dataframe(cross_rules[['antecedent', 'consequent', 'antecedent_dept', 'consequent_dept', 'lift']], use_container_width=True)
+                st.write("**Note:** These pairs are ideal for cross-aisle promotions or 'bundle' kits.")
+        
+        with st.expander("📚 Understanding metrics"):
             st.markdown("""
-            - **Confidence:** Probability that the *Consequent* is bought when the *Antecedent* is in the cart.
-            - **Lift:** The strength of the association. A Lift > 1 means the items are bought together much more often than by random chance.""")
+            - **Confidence:** Probability that the *consequent* is bought when the *antecedent* is in the cart.
+            - **Lift:** The strength of the association. A lift > 1 means the items are bought together much more often than by random chance.
+            - **Gross margin:** Department-specific profit margin before operating expenses (sourced from industry reports).
+            - **Est. revenue:** Expected extra revenue per bundle (basket size × lift × margin).
+            """)
+    
+   
+    # Scenario planner
+   
+    elif menu == "📈 Scenario planner":
+        st.title("📈 Scenario planner")
+        st.markdown("**What-if analysis:** Explore different scenarios for promotion performance")
+        
+        if "sensitivity" in data:
+            df_sens = data["sensitivity"]
+            
+            scenario = st.radio("Select scenario", ["conservative", "baseline", "optimistic"], horizontal=True)
+            df_scenario = df_sens[df_sens["scenario"] == scenario]
+            
+            col1, col2, col3 = st.columns(3)
+            scenarios = ["conservative", "baseline", "optimistic"]
+            for scen, col in zip(scenarios, [col1, col2, col3]):
+                scen_data = df_sens[df_sens["scenario"] == scen]
+                total_impact = scen_data["net_impact_eur"].sum()
+                with col:
+                    st.metric(scen.capitalize(), f"€{total_impact:,.0f}")
+            
+            fig = px.bar(
+                df_sens,
+                x="scenario",
+                y="net_impact_eur",
+                color="scenario",
+                labels={"net_impact_eur": "Net impact (EUR)", "scenario": "Scenario"},
+                title="Net impact range by scenario"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+            
+            st.info("""
+            📊 **What do these scenarios mean?**
+            - **Conservative:** Lower redemption (30%), lower margins, lower adoption
+            - **Baseline:** Research-backed assumptions (42.4% redemption, 30% margin, 12% adoption)
+            - **Optimistic:** Higher redemption (55%), higher margins, higher adoption
+            
+            *Use these ranges to plan budgets and set realistic expectations.*
+            """)
+    
+   
+    # Sources
+   
+    elif menu == "ℹ️ Sources":
+        st.title("ℹ️ Scientific sources & methodology")
+        
+        if "metadata" in data:
+            meta = data["metadata"]
+            
+            st.subheader("📚 Scientific sources & quotes")
+            if "scientific_sources" in meta:
+                for source in meta["scientific_sources"]:
+                    st.subheader(source["source"])
+                    if "doi" in source:
+                        st.caption(f"DOI: {source['doi']}")
+                    elif "url" in source:
+                        st.caption(f"URL: {source['url']}")
+                    
+                    for quote in source["quotes"]:
+                        st.markdown(f"> *{quote}*")
+                    
+                    st.caption(f"Used for: {source['used_for']}")
+                    st.divider()
+            
+            st.subheader("Department margin sources")
+            if "margins" in meta and "sources" in meta["margins"]:
+                margin_sources = meta["margins"]["sources"]
+                for dept, info in margin_sources.items():
+                    st.markdown(f"**{dept.title()} ({info['value']*100:.0f}% margin)**")
+                    st.caption(f"Source: {info['source']}")
+                    st.caption(f"Quote: *{info['quote']}*")
+                    st.divider()
+            
+            st.warning("""
+            ⚠️ **Important notes**:
+            1. **Gross vs. net margins:** All margin figures are gross margins (before operating expenses). Net profitability depends on your store's specific cost structure.
+            2. **Projections, not guarantees:** These are research-backed estimates. Actual results may vary.
+            3. **Test before scaling:** Start with a small A/B test before rolling out to all customers.
+            
+            *For profit calculations, apply your internal cost-of-goods data to the revenue figures above.*
+            """)
 
-else:
-    st.error("Data files not found. Please ensure all CSV files are present in the 'data/processed/' folder.")
+# Run app
+if __name__ == "__main__":
+    main()
