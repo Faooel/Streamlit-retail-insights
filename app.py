@@ -29,6 +29,8 @@ def load_data():
         "financial": "financial_impact_summary.csv",
         "segment_metrics": "segment_metrics.csv",
         "bundle_rec": "bundle_recommendations.csv",
+        "first_pos": "first_position_products.csv",
+        "last_pos": "last_position_products.csv",
         "promo_efficiency": "promotion_efficiency.csv",
         "sensitivity": "sensitivity_analysis.csv",
         "metadata": "metadata_06.json",
@@ -354,12 +356,12 @@ def main():
             st.warning(f"**Retention strategy:** For {selected_seg}, customers are likely to churn after **{int(p80_days)} days**. Target them at day **{int(p80_days - 2)}**.")
     
    
-    # Category performance
-   
+# Category performance
     elif menu == "📦 Category performance":
         st.title("📦 Category & shopping journey analysis")
         st.write("Analysis of product roles: Anchors (triggers) vs last-position (complements).")
         
+        # 1. AISLE PERFORMANCE (Indépendant)
         if 'aisle' in data:
             st.subheader("Top 20 aisles by volume")
             top_aisles = data['aisle'].nlargest(20, 'items_sold')
@@ -373,53 +375,61 @@ def main():
             fig_aisle.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=450)
             st.plotly_chart(fig_aisle, use_container_width=True)
             
-            st.markdown("-")
+        st.markdown("---") # Séparateur clair
             
-            st.subheader("Shopping journey analysis")
-            st.caption("Note: Ratio = sur-representation ratio in a specific position compared to the global average.")
-            
-            col_left, col_right = st.columns(2)
-            with col_left:
-                st.info("### ⚓ Anchor products (first in cart)")
-                if 'first_pos' in data:
-                    top_anchors = data['first_pos'].nlargest(10, 'first3_ratio')
-                    fig_anchors = px.bar(
-                        top_anchors,
-                        x='first3_ratio',
-                        y='product_name',
-                        orientation='h',
-                        color='first3_ratio',
-                        color_continuous_scale='Blues',
-                        title="Top 10: first_position_ratio",
-                        labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
-                    )
-                    fig_anchors.update_layout(yaxis={'categoryorder':'total ascending'})
-                    st.plotly_chart(fig_anchors, use_container_width=True)
-            
-            with col_right:
-                st.info("### 🛒 Complement products (last in cart)")
-                if 'last_pos' in data:
-                    top_lasts = data['last_pos'].nlargest(10, 'last_position_ratio')
-                    fig_lasts = px.bar(
-                        top_lasts,
-                        x='last_position_ratio',
-                        y='product_name',
-                        orientation='h',
-                        color='last_position_ratio',
-                        color_continuous_scale='Oranges',
-                        title="Top 10: last_position_ratio",
-                        labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
-                    )
-                    fig_lasts.update_layout(yaxis={'categoryorder':'total ascending'})
-                    st.plotly_chart(fig_lasts, use_container_width=True)
-            
-            st.markdown("-")
-            st.subheader("Retail strategy suggestions")
-            rec_col1, rec_col2 = st.columns(2)
-            with rec_col1:
-                st.success("**Navigation:** Place high *first_position_ratio* items (anchors) at the back of the store to increase travel distance.")
-            with rec_col2:
-                st.error("**Checkout:** Use high *last_position_ratio* items for checkout displays or final app notifications.")
+        # 2. SHOPPING JOURNEY ANALYSIS (Sorti du bloc 'if aisle')
+        st.subheader("Shopping journey analysis")
+        st.caption("Note: Ratio = sur-representation ratio in a specific position compared to the global average.")
+        
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            st.info("### ⚓ Anchor products (first in cart)")
+            if 'first_pos' in data:
+                top_anchors = data['first_pos'].nlargest(10, 'first3_ratio')
+                fig_anchors = px.bar(
+                    top_anchors,
+                    x='first3_ratio',
+                    y='product_name',
+                    orientation='h',
+                    color='first3_ratio',
+                    color_continuous_scale='Blues',
+                    title="Top 10: first_position_ratio",
+                    labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
+                )
+                fig_anchors.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_anchors, use_container_width=True)
+            else:
+                st.warning("Data for 'first_pos' missing.")
+        
+        with col_right:
+            st.info("### 🛒 Complement products (last in cart)")
+            if 'last_pos' in data:
+                top_lasts = data['last_pos'].nlargest(10, 'last_position_ratio')
+                fig_lasts = px.bar(
+                    top_lasts,
+                    x='last_position_ratio',
+                    y='product_name',
+                    orientation='h',
+                    color='last_position_ratio',
+                    color_continuous_scale='Oranges',
+                    title="Top 10: last_position_ratio",
+                    labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
+                )
+                fig_lasts.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_lasts, use_container_width=True)
+            else:
+                st.warning("Data for 'last_pos' missing.")
+        
+        st.markdown("---")
+        
+        # 3. STRATEGY SUGGESTIONS
+        st.subheader("Retail strategy suggestions")
+        rec_col1, rec_col2 = st.columns(2)
+        with rec_col1:
+            st.success("**Navigation:** Place high *first_position_ratio* items (anchors) at the back of the store to increase travel distance.")
+        with rec_col2:
+            st.error("**Checkout:** Use high *last_position_ratio* items for checkout displays or final app notifications.")
     
    
     # Smart bundles
