@@ -417,7 +417,7 @@ if data and 'rfm' in data:
                 """)
 
         # BAS DE PAGE : EXPLICATION DES MÉTRIQUES (Pour le Jury)
-        with st.expander("📚 Understanding AI Metrics (Lift & Confidence)"):
+        with st.expander("📚 Understanding metrics (Lift & Confidence)"):
             st.markdown("""
             - **Confidence:** Probability that the *Consequent* is bought when the *Antecedent* is in the cart.
             - **Lift:** The strength of the association. A Lift > 1 means the items are bought together much more often than by random chance.""")
