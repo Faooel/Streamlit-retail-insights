@@ -299,9 +299,9 @@ if data and 'rfm' in data:
 # --- PAGE 4: CATEGORY & SHOPPING JOURNEY ANALYSIS ---
     elif menu == "📦 Category Performance":
         st.title("📦 Category & Shopping Journey Analysis")
-        st.markdown("Analyse du rôle des produits dans le parcours : **Anchors** (Déclencheurs) vs **Last-Position** (Compléments).")
+        st.markdown("Product role analysis in the customer journey: **Anchors** (Triggers) vs **Last-Position** (Complements).")
 
-        # 1. TOP 20 AISLES (Vue simplifiée)
+        # 1. TOP 20 AISLES (Clean View)
         st.subheader("📊 Top 20 Aisles by Sales Volume")
         if 'aisle' in data:
             top_20_df = data['aisle'].nlargest(20, 'items_sold').copy()
@@ -318,13 +318,15 @@ if data and 'rfm' in data:
         st.markdown("---")
 
         # 2. JOURNEY ANALYSIS (ANCHORS VS LAST-POSITION)
-        st.subheader("🛒 Shopping Journey Analysis")        
+        st.subheader("🛒 Shopping Journey Analysis")
+        st.caption("💡 *Note: This ratio = sur-representation ratio in a specific position compared to the global average.*")
+        
         col_anc, col_last = st.columns(2)
 
         with col_anc:
             st.info("### ⚓ Anchor Products (First in Cart)")
             if 'first_pos' in data:
-                # On utilise first3_ratio mais on l'affiche comme first_position_ratio
+                # Identify products most likely to be at the start of the journey
                 top_a = data['first_pos'].nlargest(10, 'first3_ratio')
                 fig_anc = px.bar(
                     top_a, 
@@ -333,7 +335,7 @@ if data and 'rfm' in data:
                     orientation='h', 
                     color='first3_ratio', 
                     color_continuous_scale='Blues',
-                    title="Top 10 : first_position_ratio",
+                    title="Top 10: first_position_ratio",
                     labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
                 )
                 fig_anc.update_layout(yaxis={'categoryorder':'total ascending'})
@@ -342,6 +344,7 @@ if data and 'rfm' in data:
         with col_last:
             st.warning("### 🛒 Last-Position Products (Checkout)")
             if 'last_pos' in data:
+                # Identify products most likely to be added at the very end
                 top_l = data['last_pos'].nlargest(10, 'last_position_ratio')
                 fig_last = px.bar(
                     top_l, 
@@ -350,7 +353,7 @@ if data and 'rfm' in data:
                     orientation='h',
                     color='last_position_ratio', 
                     color_continuous_scale='Oranges',
-                    title="Top 10 : last_position_ratio",
+                    title="Top 10: last_position_ratio",
                     labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
                 )
                 fig_last.update_layout(yaxis={'categoryorder':'total ascending'})
@@ -362,9 +365,9 @@ if data and 'rfm' in data:
         
         c1, c2 = st.columns(2)
         with c1:
-            st.success("**Navigation Strategy:** Placez les produits à fort *first_position_ratio* au fond du magasin pour maximiser le parcours client.")
+            st.success("**Navigation Strategy:** Place products with a high *first_position_ratio* at the back of the store to maximize the customer's travel distance and exposure to other aisles.")
         with c2:
-            st.error("**Checkout Strategy:** Utilisez les produits à fort *last_position_ratio* pour les suggestions de fin de panier ou les zones de caisse.")
+            st.error("**Checkout Strategy:** Use products with a high *last_position_ratio* for 'Frequently Forgotten' app notifications or for high-visibility checkout area displays.")
 
 # --- PAGE 5: SMART BUNDLES ---
     elif menu == "🍱 Smart Bundles":
