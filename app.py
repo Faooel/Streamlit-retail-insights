@@ -362,10 +362,10 @@ if data and 'rfm' in data:
 
 # --- PAGE 5: SMART BUNDLES ---
     elif menu == "🍱 Smart Bundles":
-        st.title("🍱 AI-Powered Smart Bundles")
+        st.title("🍱 Smart Bundles")
         st.markdown("""
         **Objective:** Increase Average Order Value (AOV) by suggesting relevant product pairings 
-        based on frequent itemset mining (Apriori Algorithm).
+        based on frequent itemset mining.
         """)
 
         # Création de 3 onglets pour les différentes stratégies de recommandation
