@@ -319,7 +319,6 @@ if data and 'rfm' in data:
 
         # 2. JOURNEY ANALYSIS (ANCHORS VS LAST-POSITION)
         st.subheader("🛒 Shopping Journey Analysis")
-        st.caption("💡 *Note: This ratio = sur-representation ratio in a specific position compared to the global average.*")
         
         col_anc, col_last = st.columns(2)
 
