@@ -31,10 +31,10 @@ def load_data():
         "rules_cross_pairs": "rules_cross_department_pairs.csv",
         "rules_top": "rules_top_products.csv",
         "prod_list": "products_in_rules.csv",
-        "first_pos": "first_position_products.csv",       # NOUVEAU
-        "last_pos": "last_position_products.csv",         # NOUVEAU
-        "top_1000": "top_1000_products.csv",              # NOUVEAU
-        "prices": "prices_final_imputed_translated.csv"   # NOUVEAU
+        "first_pos": "first_position_products.csv",
+        "last_pos": "last_position_products.csv",
+        "top_1000": "top_1000_products.csv",
+        "prices": "prices_final_imputed_translated.csv"
     }
     
     data = {}
@@ -360,17 +360,67 @@ if data and 'rfm' in data:
         with c2:
             st.error("**Checkout Optimization:** Feature 'Impulse' products near the checkout area or as final app notifications.")
 
-    # Page 5
+# --- PAGE 5: SMART BUNDLES ---
     elif menu == "🍱 Smart Bundles":
         st.title("🍱 AI-Powered Smart Bundles")
-        t1, t2 = st.tabs(["By Segment", "Cross-Department"])
+        st.markdown("""
+        **Objective:** Increase Average Order Value (AOV) by suggesting relevant product pairings 
+        based on frequent itemset mining (Apriori Algorithm).
+        """)
+
+        # Création de 3 onglets pour les différentes stratégies de recommandation
+        t1, t2, t3 = st.tabs(["🎯 By Segment", "🏢 By Department", "🔄 Cross-Department"])
+
+        # ONGLET 1 : BUNDLES PAR SEGMENT
         with t1:
+            st.subheader("Segment-Specific Recommendations")
+            st.write("Targeted bundles based on the unique shopping habits of each group.")
             if 'rules_seg' in data:
-                seg_b = st.selectbox("Target Segment:", df_rfm['segment'].unique())
-                st.dataframe(data['rules_seg'][data['rules_seg']['segment'] == seg_b].nlargest(10, 'lift'), use_container_width=True)
+                # Sélecteur de segment
+                seg_b = st.selectbox("Select Target Segment:", sorted(df_rfm['segment'].unique()), key="sb1")
+                
+                # Filtrage et tri par Lift (puissance de l'association)
+                rules_s = data['rules_seg'][data['rules_seg']['segment'] == seg_b].sort_values('lift', ascending=False).head(10)
+                
+                if not rules_s.empty:
+                    st.dataframe(rules_s[['antecedent', 'consequent', 'confidence', 'lift']], use_container_width=True)
+                    st.success(f"**Top Insight:** Customers in the **{seg_b}** segment are very likely to buy **{rules_s.iloc[0]['consequent']}** when they have **{rules_s.iloc[0]['antecedent']}** in their cart.")
+                else:
+                    st.info("No specific rules found for this segment.")
+
+        # ONGLET 2 : BUNDLES PAR DÉPARTEMENT
         with t2:
-            if 'rules_cross' in data:
-                st.dataframe(data['rules_cross'].nlargest(10, 'lift'), use_container_width=True)
+            st.subheader("Departmental Product Pairings")
+            st.write("Internal associations to optimize shelf placement within a specific department.")
+            if 'rules_dept' in data:
+                # Liste des départements présents dans les règles
+                dept_list = sorted(data['rules_dept']['department'].unique())
+                selected_dept = st.selectbox("Select Department:", dept_list)
+                
+                rules_d = data['rules_dept'][data['rules_dept']['department'] == selected_dept].sort_values('lift', ascending=False).head(10)
+                st.dataframe(rules_d[['antecedent', 'consequent', 'support', 'confidence', 'lift']], use_container_width=True)
+
+        # ONGLET 3 : OPPORTUNITÉS CROSS-DEPARTMENT
+        with t3:
+            st.subheader("🔄 Strategic Cross-Selling Opportunities")
+            st.write("Associations between different departments (e.g., Snacks + Beverages).")
+            if 'rules_cross_pairs' in data:
+                # On affiche les meilleures opportunités cross-départementales au global
+                rules_c = data['rules_cross_pairs'].sort_values('lift', ascending=False).head(15)
+                
+                # On rend le tableau plus lisible en montrant les départements concernés
+                st.dataframe(rules_c[['antecedent', 'consequent', 'antecedent_dept', 'consequent_dept', 'lift']], use_container_width=True)
+                
+                st.info("""
+                **Strategic Use:** Use these rules to create 'Meal Kits' or promotional displays that link 
+                two different areas of the store (e.g., placing specific crackers in the cheese aisle).
+                """)
+
+        # BAS DE PAGE : EXPLICATION DES MÉTRIQUES (Pour le Jury)
+        with st.expander("📚 Understanding AI Metrics (Lift & Confidence)"):
+            st.markdown("""
+            - **Confidence:** Probability that the *Consequent* is bought when the *Antecedent* is in the cart.
+            - **Lift:** The strength of the association. A Lift > 1 means the items are bought together much more often than by random chance.""")
 
 else:
     st.error("Data files not found. Please ensure all CSV files are present in the 'data/processed/' folder.")
