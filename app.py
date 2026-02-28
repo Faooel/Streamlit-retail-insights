@@ -299,56 +299,62 @@ if data and 'rfm' in data:
 # --- PAGE 4: CATEGORY & SHOPPING JOURNEY ANALYSIS ---
     elif menu == "📦 Category Performance":
         st.title("📦 Category & Shopping Journey Analysis")
-        st.markdown("Global view of aisle performance and customer journey roles.")
+        st.markdown("Analyse du rôle des produits dans le parcours : **Anchors** (Déclencheurs) vs **Last-Position** (Compléments).")
 
-        # 1. TOP 20 AISLES (Graphique Treemap Seul)
+        # 1. TOP 20 AISLES (Vue simplifiée)
         st.subheader("📊 Top 20 Aisles by Sales Volume")
-        
         if 'aisle' in data:
             top_20_df = data['aisle'].nlargest(20, 'items_sold').copy()
-            
             fig_aisle = px.treemap(
                 top_20_df, 
                 path=['aisle'], 
                 values='items_sold',
                 color='items_sold',
-                color_continuous_scale='Blues',
-                title="Aisle Distribution (Size = Units Sold)"
+                color_continuous_scale='Blues'
             )
-            fig_aisle.update_layout(margin=dict(t=30, b=0, l=0, r=0), height=500)
+            fig_aisle.update_layout(margin=dict(t=10, b=10, l=10, r=10), height=450)
             st.plotly_chart(fig_aisle, use_container_width=True)
 
         st.markdown("---")
 
-        # 2. SHOPPING JOURNEY ANALYSIS (ANCHORS VS IMPULSE)
-        st.subheader("🛒 Shopping Journey Analysis")
-        col_anc, col_imp = st.columns(2)
+        # 2. JOURNEY ANALYSIS (ANCHORS VS LAST-POSITION)
+        st.subheader("🛒 Shopping Journey Analysis")        
+        col_anc, col_last = st.columns(2)
 
         with col_anc:
             st.info("### ⚓ Anchor Products (First in Cart)")
             if 'first_pos' in data:
+                # On utilise first3_ratio mais on l'affiche comme first_position_ratio
                 top_a = data['first_pos'].nlargest(10, 'first3_ratio')
                 fig_anc = px.bar(
-                    top_a, x='first3_ratio', y='product_name', orientation='h', 
-                    color='first3_ratio', color_continuous_scale='Blues',
-                    title="Top 10 Destination Products",
-                    labels={'first3_ratio': 'Start-of-Cart Probability', 'product_name': ''}
+                    top_a, 
+                    x='first3_ratio', 
+                    y='product_name', 
+                    orientation='h', 
+                    color='first3_ratio', 
+                    color_continuous_scale='Blues',
+                    title="Top 10 : first_position_ratio",
+                    labels={'first3_ratio': 'first_position_ratio', 'product_name': ''}
                 )
                 fig_anc.update_layout(yaxis={'categoryorder':'total ascending'})
                 st.plotly_chart(fig_anc, use_container_width=True)
 
-        with col_imp:
-            st.warning("### ⚡ Impulse Products (Last in Cart)")
+        with col_last:
+            st.warning("### 🛒 Last-Position Products (Checkout)")
             if 'last_pos' in data:
-                top_i = data['last_pos'].nlargest(10, 'last_position_ratio')
-                fig_imp = px.bar(
-                    top_i, x='last_position_ratio', y='product_name', orientation='h',
-                    color='last_position_ratio', color_continuous_scale='Oranges',
-                    title="Top 10 Impulse Products",
-                    labels={'last_position_ratio': 'End-of-Cart Probability', 'product_name': ''}
+                top_l = data['last_pos'].nlargest(10, 'last_position_ratio')
+                fig_last = px.bar(
+                    top_l, 
+                    x='last_position_ratio', 
+                    y='product_name', 
+                    orientation='h',
+                    color='last_position_ratio', 
+                    color_continuous_scale='Oranges',
+                    title="Top 10 : last_position_ratio",
+                    labels={'last_position_ratio': 'last_position_ratio', 'product_name': ''}
                 )
-                fig_imp.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig_imp, use_container_width=True)
+                fig_last.update_layout(yaxis={'categoryorder':'total ascending'})
+                st.plotly_chart(fig_last, use_container_width=True)
 
         # 3. STRATEGIC RECOMMENDATIONS
         st.markdown("---")
@@ -356,9 +362,9 @@ if data and 'rfm' in data:
         
         c1, c2 = st.columns(2)
         with c1:
-            st.success("**Store Layout:** Place your top 'Anchor' products at the back of the store to maximize exposure to other aisles.")
+            st.success("**Navigation Strategy:** Placez les produits à fort *first_position_ratio* au fond du magasin pour maximiser le parcours client.")
         with c2:
-            st.error("**Checkout Optimization:** Feature 'Impulse' products near the checkout area or as final app notifications.")
+            st.error("**Checkout Strategy:** Utilisez les produits à fort *last_position_ratio* pour les suggestions de fin de panier ou les zones de caisse.")
 
 # --- PAGE 5: SMART BUNDLES ---
     elif menu == "🍱 Smart Bundles":
