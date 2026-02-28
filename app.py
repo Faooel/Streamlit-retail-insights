@@ -136,7 +136,7 @@ if data and 'rfm' in data:
                     values='items_sold', 
                     color='items_sold',
                     color_continuous_scale='Greys',
-                    title=f"Top 20 AislesS"
+                    title=f"Top 20 Aisles"
                 )
                 fig_aisle.update_layout(margin=dict(t=50, b=0, l=0, r=0), height=500)
                 st.plotly_chart(fig_aisle, use_container_width=True)
