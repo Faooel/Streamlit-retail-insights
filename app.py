@@ -5,12 +5,12 @@ import os
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-# --- CONFIGURATION ---
+# Config
 st.set_page_config(page_title="Retail Insights Dashboard", layout="wide", initial_sidebar_state="expanded")
 
 @st.cache_data
 def get_segment_stats(df):
-        # Optimisation pour les graphiques page 3
+        # Opti pour page 3
         stats = df.groupby('segment')['avg_days_between_orders'].agg(['median', lambda x: x.quantile(0.8)]).reset_index()
         stats.columns = ['Segment', 'Median Days', '80% Return By']
         return stats
@@ -92,7 +92,7 @@ if data and 'rfm' in data:
         m4.metric("Revenue / Customer", f"{rev_per_cust:,.2f} €")
 
         m5, m6, m7, m8 = st.columns(4)
-        m5.metric("Avg Basket (AOV)", f"{aov:.2f} €")
+        m5.metric("Avg Basket", f"{aov:.2f} €")
         m6.metric("Return Cycle", f"{avg_days:.1f} days")
         m7.metric("Avg RFM Score", f"{avg_rfm:.1f} / 15")
         m8.metric("Active Segments", active_segments_count)
@@ -122,23 +122,6 @@ if data and 'rfm' in data:
         col_left, col_right = st.columns(2)
         
         with col_left:
-            st.subheader("Detailed Category Performance")
-            if 'dept' in data and 'aisle' in data:
-                # Top departments chart
-                top_15_depts = data['dept'].nlargest(15, 'items_sold')
-                total_dept_items = data['dept']['items_sold'].sum()
-                
-                fig_dept = px.treemap(
-                    top_15_depts, 
-                    path=['department'], 
-                    values='items_sold', 
-                    color='items_sold',
-                    color_continuous_scale='Blues',
-                    title=f"Top 15 Departments"
-                )
-                fig_dept.update_layout(margin=dict(t=50, b=0, l=0, r=0), height=400)
-                st.plotly_chart(fig_dept, use_container_width=True)
-                
                 # Aisle performance chart
                 top_20_aisles = data['aisle'].nlargest(20, 'items_sold')
                 total_aisle_items = data['aisle']['items_sold'].sum()
@@ -192,7 +175,7 @@ if data and 'rfm' in data:
 
         st.markdown("---")
 
-        # Srategi et top 20 produits
+        # Srategi et top 10 produits
         st.subheader("Detailed Segment Explorer")
         selected_seg = st.selectbox("Select a segment to explore details:", sorted(df_rfm['segment'].unique()))
         
@@ -220,7 +203,7 @@ if data and 'rfm' in data:
             st.warning(f"**Recommended Strategy:** \n\n {strategies.get(selected_seg, 'Standard nurturing.')}")
 
         with col_prod:
-            st.subheader(f"Top 20 Favorite Products: {selected_seg}")
+            st.subheader(f"Top 10 Favorite Products: {selected_seg}")
             if 'prod_segment' in data:
                 prods_str = data['prod_segment'][data['prod_segment']['segment'] == selected_seg]['products'].values[0]
                 prods_list = [p.strip() for p in prods_str.split(',')]
@@ -281,10 +264,6 @@ if data and 'rfm' in data:
             st.metric("Median Return Time", f"{median_val:.1f} days")
         with c2:
             st.metric("80% Threshold", f"{p80_val:.1f} days")
-        with c3:
-            long_tail = (df_timing['avg_days_between_orders'] > 90).mean() * 100
-            st.metric("Inactive (90d+)", f"{long_tail:.1f}%")
-
         st.markdown("---")
 
         # segment-specific timing stats
@@ -318,7 +297,7 @@ if data and 'rfm' in data:
         st.title("📦 Category & Aisle Analysis")
         if 'aisle' in data:
             st.plotly_chart(px.treemap(data['aisle'].nlargest(20, 'items_sold'), path=['aisle'], values='items_sold',
-                                       title="Top 20 Aisles by Volume"), use_container_width=True)
+                                       title="Top 10 SAisles by Volume"), use_container_width=True)
 
     # Page 5
     elif menu == "🍱 Smart Bundles":
