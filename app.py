@@ -479,18 +479,18 @@ def main():
                 st.caption(f"Total: {len(dept_rules)} associations found in {target_dept}")
         
         with tab_cross:
-            st.subheader("Cross-department sales")
-            st.write("Pairings between different store areas.")
+            st.subheader("🔄 Strategic Cross-selling Opportunities")
             if 'rules_cross_pairs' in data:
-                # On affiche TOUTES les opportunités cross-département
                 cross_rules = data['rules_cross_pairs'].sort_values('lift', ascending=False)
+                
+                # Affichage du nombre exact trouvé
+                st.write(f"Analysis identified **{len(cross_rules)}** high-potential cross-department associations.")
                 
                 st.dataframe(
                     cross_rules[['antecedent', 'antecedent_dept', 'consequent', 'consequent_dept', 'lift', 'confidence']], 
                     use_container_width=True,
                     hide_index=True
                 )
-                st.write(f"**Note:** {len(cross_rules)} strategic cross-selling opportunities identified.")
         
         with st.expander("📚 Understanding metrics"):
             st.markdown("""
