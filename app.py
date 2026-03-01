@@ -379,7 +379,7 @@ def main():
             
         # 2. SHOPPING JOURNEY ANALYSIS (Sorti du bloc 'if aisle')
         st.subheader("Shopping journey analysis")
-        st.caption("Note: Ratio = sur-representation ratio in a specific position compared to the global average.")
+        st.caption("Note : Position ratio = how much more often a product appears in this position compared to its overall purchase frequency. A ratio of 2.0 means the product is added in this position twice as often as random chance would predict.")
         
         col_left, col_right = st.columns(2)
         
@@ -432,8 +432,7 @@ def main():
             st.error("**Checkout:** Use high *last_position_ratio* items for checkout displays or final app notifications.")
     
    
-    # Smart bundles
-   
+# Smart bundles
     elif menu == "🍱 Smart bundles":
         st.title("🍱 Product bundles & association rules")
         st.write("Identify product pairings to increase average order value (AOV) based on transaction history.")
@@ -444,9 +443,11 @@ def main():
             st.subheader("Segment-specific rules")
             if 'bundle_rec' in data:
                 target_seg = st.selectbox("Select target segment", sorted(data['bundle_rec']['segment'].unique()))
-                rules_s = data['bundle_rec'][data['bundle_rec']['segment'] == target_seg].sort_values("estimated_revenue_per_recommendation", ascending=False).head(10)
+                # On affiche TOUTES les règles (head supprimé)
+                rules_s = data['bundle_rec'][data['bundle_rec']['segment'] == target_seg].sort_values("estimated_revenue_per_recommendation", ascending=False)
                 
                 if not rules_s.empty:
+                    st.write(f"Showing {len(rules_s)} recommendations for {target_seg}:")
                     for idx, row in rules_s.iterrows():
                         with st.container(border=True):
                             col1, col2, col3 = st.columns([2, 1, 1])
@@ -467,16 +468,29 @@ def main():
             if 'rules_dept' in data:
                 depts = sorted(data['rules_dept']['department'].unique())
                 target_dept = st.selectbox("Select department:", depts)
-                dept_rules = data['rules_dept'][data['rules_dept']['department'] == target_dept].sort_values('lift', ascending=False).head(10)
-                st.dataframe(dept_rules[['antecedent', 'consequent', 'confidence', 'lift']], use_container_width=True)
+                # VERSION ORIGINELLE : Tableau complet trié par Lift
+                dept_rules = data['rules_dept'][data['rules_dept']['department'] == target_dept].sort_values('lift', ascending=False)
+                
+                st.dataframe(
+                    dept_rules[['antecedent', 'consequent', 'confidence', 'lift']], 
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.caption(f"Total: {len(dept_rules)} associations found in {target_dept}")
         
         with tab_cross:
             st.subheader("Cross-department sales")
             st.write("Pairings between different store areas.")
             if 'rules_cross_pairs' in data:
-                cross_rules = data['rules_cross_pairs'].sort_values('lift', ascending=False).head(15)
-                st.dataframe(cross_rules[['antecedent', 'consequent', 'antecedent_dept', 'consequent_dept', 'lift']], use_container_width=True)
-                st.write("**Note:** These pairs are ideal for cross-aisle promotions or 'bundle' kits.")
+                # On affiche TOUTES les opportunités cross-département
+                cross_rules = data['rules_cross_pairs'].sort_values('lift', ascending=False)
+                
+                st.dataframe(
+                    cross_rules[['antecedent', 'antecedent_dept', 'consequent', 'consequent_dept', 'lift', 'confidence']], 
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.write(f"**Note:** {len(cross_rules)} strategic cross-selling opportunities identified.")
         
         with st.expander("📚 Understanding metrics"):
             st.markdown("""
